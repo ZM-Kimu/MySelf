@@ -1,0 +1,16 @@
+Flask
+Flask-MySQLdb
+Flask-Migrate
+flask_jwt_extended
+flask-bcrypt
+python-dotenv
+SQLAlchemy
+transformers 
+requests      
+Flask-APScheduler
+pillow
+tencentcloud-sdk-python
+Flask-CORS
+openai
+pytz
+marshmallow
