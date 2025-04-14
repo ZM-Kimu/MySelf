@@ -28,5 +28,8 @@
 ### 8. [WallpaperEngineSpineViewer](./WallpaperEngineSpineViewer) —— Wallpaper Engine 网页 Spine 视图工具
 一个用于查看 Spine 动画的网页工具，包含 `assets`、`css`、`js` 及 `lib` 目录，支持光标跟随等特效。
 
+### 9. [MultiIPBandrateAcceleratorProxy](./MultiIPBandrateAcceleratorProxy) —— 将网络适配器绑定多个 IP 以加速网络
+一个用于 Windows 平台的图形化工具，用于单个 IP 下网络速率受限的区域。为自己的主机增加局域网 IP 地址以加速。
+
 
 
