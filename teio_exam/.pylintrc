@@ -1,0 +1,2 @@
+[MASTER]
+extension-pkg-whitelist=PyQt5,QtWidgets,requests,pywin32,QtCore,QtCore.Qt,Qt

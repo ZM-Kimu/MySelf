@@ -1,0 +1,17 @@
+pyqt5
+pynput
+pywin32
+pyinstaller
+pyqt5-stubs
+
+python-docx
+pymupdf
+pillow
+
+flask
+requests
+types-requests
+
+paddleocr
+mss
+pillow

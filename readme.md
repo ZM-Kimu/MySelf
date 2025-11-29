@@ -31,5 +31,8 @@
 ### 9. [MultiIPBandrateAcceleratorProxy](./MultiIPBandrateAcceleratorProxy) —— 将网络适配器绑定多个 IP 以加速网络
 一个用于 Windows 平台的图形化工具，用于单个 IP 下网络速率受限的区域。为自己的主机增加局域网 IP 地址以加速。
 
+### 10. [teio_exam](./teio_exam) —— 帝王题目检索器
+基于 PyQt5 的桌面题库检索与聊天工具，支持本地/远端题库获取、正则/普通搜索、高亮跳转、图片题目展示、置顶与鼠标手势控制。
+
 
 
