@@ -142,13 +142,11 @@ class App:
                     else "dispatch.exe"
                 ),
                 "start",
-                "--host",
+                "--ip",
                 "127.0.0.1",
                 "--port",
                 str(self.port),
-            ]
-            if self.protocol == "http":
-                command.append("--http")
+            ] + self.ips
             self.monitor_thread = threading.Thread(
                 target=self.monitor_process,
                 args=(command,),
@@ -203,9 +201,11 @@ class App:
     def monitor_process(self, command):
         while not self.stop:
             if self.process is None or self.process.poll() is not None:
-                self.process = subprocess.Popen(
-                    command#, creationflags=subprocess.CREATE_NO_WINDOW
-                )
+                creationflags = 0
+                if os.name == "nt":
+                    creationflags |= subprocess.CREATE_NO_WINDOW
+                    creationflags |= subprocess.HIGH_PRIORITY_CLASS
+                self.process = subprocess.Popen(command, creationflags=creationflags)
             sleep(4)
         if self.process:
             self.process.terminate()

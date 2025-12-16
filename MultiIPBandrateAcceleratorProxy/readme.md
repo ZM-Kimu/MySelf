@@ -12,23 +12,23 @@
 
 ## 依赖环境
 
-- Python 3.x
+- Python 3.11+
 - Windows 系统
 - 以下 Python 第三方库：
   - `ping3`
   - `psutil`
   - `pystray`
   - `Pillow`
+  - （可选）`pyinstaller`：用于打包 exe
 
 ## 文件说明
 
-| 文件名               | 说明                                    |
-| -------------------- | --------------------------------------- |
-| `LaojishiNetwork.py` | 主程序，包含 Tkinter 图形界面与功能逻辑 |
-| `networkDelivery.py` | 网络功能模块，如设置 IP、代理、扫描等   |
-| `pingHost.py`        | 基于 `ping3` 的 IP 可达性检测函数       |
-| `icon.ico/png`       | 程序图标，用于图形界面与托盘图标显示    |
-| `dispatch.exe`       | 外部代理服务器程序，基于Node.js         |
+| 文件名               | 说明                                     |
+| -------------------- | ---------------------------------------- |
+| `LaojishiNetwork.py` | 主程序，包含 Tkinter 图形界面与功能逻辑  |
+| `networkDelivery.py` | 网络功能模块，如设置 IP、代理、扫描等    |
+| `icon.ico/png`       | 程序图标，用于图形界面与托盘图标显示     |
+| `dispatch.exe`       | 外部代理服务器程序（来自 Dispatch 项目） |
 
 ## 使用方法
 
@@ -40,7 +40,9 @@
 ## 注意事项
 
 - 必须以管理员权限运行以便执行 IP 和注册表修改操作。
-- 程序依赖于 `dispatch.exe` 可执行文件，请确保其放在当前目录。
+- 程序依赖于 `dispatch.exe` 可执行文件，请确保其放在当前目录。  
+  `dispatch.exe` 是开源项目 Dispatch 的构建产物：`https://github.com/alexkirsz/dispatch`  
+  你可以从该仓库的 Releases 下载对应平台的可执行文件，或自行编译后放入本项目目录。
 - 推荐使用 `pyinstaller` 进行打包，例如：
 
 ```bash

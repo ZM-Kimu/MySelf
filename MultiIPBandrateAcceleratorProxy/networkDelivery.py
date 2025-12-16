@@ -1,9 +1,8 @@
-import ipaddress
 import multiprocessing
 import socket
 import subprocess
 import winreg as reg
-from multiprocessing import Pool
+from multiprocessing.dummy import Pool as ThreadPool
 
 import ping3
 import psutil
@@ -27,15 +26,14 @@ def get_subnet():
     addrs = psutil.net_if_addrs()
     for adapter, addr_info in addrs.items():
         for addr in addr_info:
-            if addr.family == socket.AF_INET:
+            if addr.family == socket.AF_INET and not addr.address.startswith("169"):
                 ip_addr = addr.address
                 netmask = addr.netmask
-                network = ipaddress.IPv4Network(f"{ip_addr}/{netmask}", strict=False)
                 return adapter, ip_addr, netmask
 
 
 def ping_subnet(ips):
-    with Pool(processes=50) as pool:  # 并发限制为10
+    with ThreadPool(processes=50) as pool:
         results = pool.map(ping_host, ips)
         return [ip if alive else None for ip, alive in results]
 
@@ -111,7 +109,7 @@ def delete_ip_address(adapter, ips):
 
 
 def get_available_ip():
-    adapter, ip, mask = get_subnet()
+    adapter, ip, _ = get_subnet()
     subnet = ip.rsplit(".", 1)[0]
     ips = [f"{subnet}.{i}" for i in range(1, 255)]
     count = 0
