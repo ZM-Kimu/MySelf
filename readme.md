@@ -34,5 +34,8 @@
 ### 10. [teio_exam](./teio_exam) —— 帝王题目检索器
 基于 PyQt5 的桌面题库检索与聊天工具，支持本地/远端题库获取、正则/普通搜索、高亮跳转、图片题目展示、置顶与鼠标手势控制。
 
+### 11. [tencentcloud_ssl_renewer](./tencentcloud_ssl_renewer) —— 腾讯云证书自动同步工具
+从腾讯云证书池同步指定域名的最新已签发证书到本地 Nginx，并提供一键续期与 cron 定时更新功能。
+
 
 
