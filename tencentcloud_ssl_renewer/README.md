@@ -9,37 +9,6 @@
 
 依赖见 `requirements.txt`。
 
-## 单文件夹克隆
-
-Git v2.25+ 推荐写法：
-
-```
-# 1. 稀疏克隆
-git clone --filter=blob:none --sparse <仓库地址>
-
-cd <仓库目录>
-
-# 2. 指定文件夹，比如 src/moduleA
-git sparse-checkout set src/moduleA
-```
-
-执行完后：
-
-工作目录里只会出现 `src/moduleA`（以及必要的 Git 目录/配置）。
-
-其他目录是“隐藏”的，需要时可以追加：
-
-```
-git sparse-checkout add another/path
-```
-
-要恢复成整个仓库可见：
-
-```
-git sparse-checkout disable
-```
-
-
 ## 环境变量
 运行前需要设置腾讯云 API 凭证：
 

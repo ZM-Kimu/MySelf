@@ -37,5 +37,33 @@
 ### 11. [tencentcloud_ssl_renewer](./tencentcloud_ssl_renewer) —— 腾讯云证书自动同步工具
 从腾讯云证书池同步指定域名的最新已签发证书到本地 Nginx，并提供一键续期与 cron 定时更新功能。
 
+## 单文件夹克隆
 
+Git v2.25+ 推荐写法：
+
+```
+# 1. 稀疏克隆
+git clone --filter=blob:none --sparse <仓库地址>
+
+cd <仓库目录>
+
+# 2. 指定文件夹，比如 src/moduleA
+git sparse-checkout set src/moduleA
+```
+
+执行完后：
+
+工作目录里只会出现 `src/moduleA`（以及必要的 Git 目录/配置）。
+
+其他目录是“隐藏”的，需要时可以追加：
+
+```
+git sparse-checkout add another/path
+```
+
+要恢复成整个仓库可见：
+
+```
+git sparse-checkout disable
+```
 
