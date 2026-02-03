@@ -26,12 +26,19 @@ usage() {
 用法: $0 <命令> [参数...]
 
 命令：
-  add <domain> <fullchain> <key>
+  add <domain> <fullchain> <key> [--post-cmd "<cmd>"]
       添加/更新一个证书配置，并立刻执行一次部署。
       例：
         $0 add xxx.com \\
             /etc/nginx/ssl/xxx.com_nginx/xxx.com_bundle.crt \\
             /etc/nginx/ssl/xxx.com_nginx/xxx.com.key
+      可选：
+        --post-cmd "<cmd>"  在该域名证书“实际更新成功”后执行命令
+      例：
+        $0 add xxx.aa.com \\
+            /etc/nginx/ssl/xxx.aa.com/fullchain.crt \\
+            /etc/nginx/ssl/xxx.aa.com/xxx.aa.com.key \\
+            --post-cmd "docker restart xxx_nginx"
 
   renew [--dry-run]
       对配置文件中的所有证书执行更新。
@@ -109,11 +116,12 @@ ensure_venv() {
   echo "虚拟环境和依赖已安装完毕。"
 }
 
-# $1: domain $2: fullchain $3: key
+# $1: domain $2: fullchain $3: key $4: post_cmd(optional)
 add_cert() {
   local domain="$1"
   local fullchain="$2"
   local key="$3"
+  local post_cmd="${4:-}"
 
   ensure_conf
   check_py_script
@@ -124,12 +132,17 @@ add_cert() {
   dir="$(dirname "$fullchain")"
   mkdir -p "$dir"
 
-  # 更新配置文件：去掉旧记录，再追加新记录（格式：domain|fullchain|key）
+  if [[ "$post_cmd" == *"|"* ]]; then
+    echo "ERROR: --post-cmd 不能包含字符 |" >&2
+    exit 1
+  fi
+
+  # 更新配置文件：去掉旧记录，再追加新记录（格式：domain|fullchain|key|post_cmd）
   local tmp
   tmp="$(mktemp)"
   # 过滤掉旧记录（按第一列精确匹配 domain）
   awk -F'|' -v d="$domain" '$1 != d' "$CONF_FILE" > "$tmp"
-  printf '%s|%s|%s\n' "$domain" "$fullchain" "$key" >> "$tmp"
+  printf '%s|%s|%s|%s\n' "$domain" "$fullchain" "$key" "$post_cmd" >> "$tmp"
   mv "$tmp" "$CONF_FILE"
   chmod 600 "$CONF_FILE"
 
@@ -137,10 +150,29 @@ add_cert() {
   echo "立即执行一次部署..."
 
   # 调用 Python 执行实际更新
-  "$PYTHON_BIN" "$PY_SCRIPT" \
+  local result_file
+  result_file="$(mktemp)"
+  if ! "$PYTHON_BIN" "$PY_SCRIPT" \
     --domain "$domain" \
     --fullchain "$fullchain" \
-    --key "$key"
+    --key "$key" \
+    --result-file "$result_file"; then
+    echo "!!! [$domain] 更新失败" >&2
+    rm -f "$result_file"
+    exit 1
+  fi
+
+  local status
+  status="$(cat "$result_file" 2>/dev/null || true)"
+  rm -f "$result_file"
+
+  if [[ "$status" == "updated" && -n "${post_cmd// }" ]]; then
+    echo "执行 post-cmd: $post_cmd"
+    if ! bash -c "$post_cmd"; then
+      echo "!!! [$domain] post-cmd 执行失败" >&2
+      exit 1
+    fi
+  fi
 }
 
 list_certs() {
@@ -152,12 +184,15 @@ list_certs() {
 
   echo "当前已配置的证书："
   echo "-------------------------------------------"
-  while IFS='|' read -r domain fullchain key; do
+  while IFS='|' read -r domain fullchain key post_cmd; do
     [[ -z "${domain// }" ]] && continue
     [[ "$domain" =~ ^# ]] && continue
     printf '  domain   : %s\n' "$domain"
     printf '  fullchain: %s\n' "$fullchain"
     printf '  key      : %s\n' "$key"
+    if [[ -n "${post_cmd// }" ]]; then
+      printf '  post-cmd : %s\n' "$post_cmd"
+    fi
     echo "-------------------------------------------"
   done < "$CONF_FILE"
 }
@@ -184,18 +219,39 @@ renew_all() {
 
   local any_fail=0
 
-  while IFS='|' read -r domain fullchain key; do
+  while IFS='|' read -r domain fullchain key post_cmd; do
     [[ -z "${domain// }" ]] && continue
     [[ "$domain" =~ ^# ]] && continue
 
     echo "=== [$domain] ==="
+    local result_file
+    result_file="$(mktemp)"
     if ! "$PYTHON_BIN" "$PY_SCRIPT" \
         --domain "$domain" \
         --fullchain "$fullchain" \
         --key "$key" \
+        --result-file "$result_file" \
         $extra_arg; then
       echo "!!! [$domain] 更新失败" >&2
       any_fail=1
+      rm -f "$result_file"
+    else
+      local status
+      status="$(cat "$result_file" 2>/dev/null || true)"
+      rm -f "$result_file"
+      if [[ "$dry_run" == "true" ]]; then
+        if [[ "$status" == "would_update" && -n "${post_cmd// }" ]]; then
+          echo "dry-run：将执行 post-cmd: $post_cmd"
+        fi
+      else
+        if [[ "$status" == "updated" && -n "${post_cmd// }" ]]; then
+          echo "执行 post-cmd: $post_cmd"
+          if ! bash -c "$post_cmd"; then
+            echo "!!! [$domain] post-cmd 执行失败" >&2
+            any_fail=1
+          fi
+        fi
+      fi
     fi
     echo
   done < "$CONF_FILE"
@@ -250,11 +306,41 @@ cmd="${1:-}"
 
 case "$cmd" in
   add)
-    if [[ $# -ne 4 ]]; then
-      echo "用法: $0 add <domain> <fullchain> <key>" >&2
+    shift
+    if [[ $# -lt 3 ]]; then
+      echo "用法: $0 add <domain> <fullchain> <key> [--post-cmd \"<cmd>\"]" >&2
       exit 1
     fi
-    add_cert "$2" "$3" "$4"
+    domain="$1"
+    fullchain="$2"
+    key="$3"
+    shift 3
+    post_cmd=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --post-cmd)
+          shift
+          if [[ $# -eq 0 ]]; then
+            echo "ERROR: --post-cmd 需要一个命令字符串" >&2
+            exit 1
+          fi
+          post_cmd="$1"
+          ;;
+        --post-cmd=*)
+          post_cmd="${1#*=}"
+          ;;
+        *)
+          if [[ -z "$post_cmd" ]]; then
+            post_cmd="$1"
+          else
+            echo "未知参数：$1" >&2
+            exit 1
+          fi
+          ;;
+      esac
+      shift
+    done
+    add_cert "$domain" "$fullchain" "$key" "$post_cmd"
     ;;
   renew)
     # 支持: renew 或 renew --dry-run

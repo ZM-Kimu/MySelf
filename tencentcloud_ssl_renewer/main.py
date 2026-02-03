@@ -58,13 +58,13 @@ def parse_args():
     )
     parser.add_argument(
         "--nginx-test-cmd",
-        default="nginx -t",
-        help='测试 Nginx 配置的命令，默认："nginx -t"',
+        default="",
+        help="测试 Nginx 配置的命令",
     )
     parser.add_argument(
         "--nginx-reload-cmd",
-        default="systemctl reload nginx",
-        help='重载 Nginx 的命令，默认："systemctl reload nginx"',
+        default="",
+        help="重载 Nginx 的命令",
     )
     parser.add_argument(
         "--no-prefer-nginx-bundle",
@@ -81,6 +81,10 @@ def parse_args():
         action="store_true",
         help="只检查与日志输出，不写入证书/私钥，也不重载 Nginx",
     )
+    parser.add_argument(
+        "--result-file",
+        help="将执行结果写入文件（updated/noop/would_update/error）",
+    )
     return parser.parse_args()
 
 
@@ -91,12 +95,21 @@ def ssl_client_new(SID: str, SKEY: str) -> SslClient:
 
 
 def parse_time(s: str) -> datetime.datetime:
-    """腾讯云 API 返回 'YYYY-MM-DD HH:MM:SS'"""
-    return (
-        datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
-        if s
-        else datetime.datetime.min
-    )
+    """腾讯云 API 返回 'YYYY-MM-DD HH:MM:SS'，时区为 GMT+8"""
+    if not s:
+        return datetime.datetime.min
+    dt = datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+    gmt8 = timezone(datetime.timedelta(hours=8))
+    return dt.replace(tzinfo=gmt8).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def write_result(path: str | None, status: str) -> None:
+    if not path:
+        return
+    try:
+        Path(path).write_text(status, encoding="utf-8")
+    except Exception as e:
+        logger.warning("写入 result-file 失败：%s", e)
 
 
 def _first_leaf_from_fullchain(pem: bytes) -> bytes:
@@ -392,24 +405,33 @@ def atomic_install(
 
 
 def nginx_reload(test_cmd: str, reload_cmd: str, dry_run: bool = False):
-    """先测试配置，再重载 Nginx；dry-run 时只测试不重载"""
+    """先测试配置，再重载 Nginx；dry-run 时只测试不重载（命令为空则跳过）"""
 
     def run(cmd):
         subprocess.run(cmd, shell=True, check=True)
 
     # 先测试配置
-    run(test_cmd)
+    if test_cmd:
+        run(test_cmd)
 
     if dry_run:
-        logger.info("dry-run：已通过 nginx -t 检测，不执行重载")
+        if test_cmd:
+            logger.info("dry-run：已通过配置检测，不执行重载")
+        else:
+            logger.info("dry-run：未配置测试命令，跳过检测与重载")
         return
 
-    run(reload_cmd)
+    if reload_cmd:
+        run(reload_cmd)
 
 
 # ---------- 主流程 ----------
 def main() -> int:
     args = parse_args()
+    result_file = args.result_file
+
+    def set_result(status: str) -> None:
+        write_result(result_file, status)
 
     SID = os.environ.get("TENCENTCLOUD_SECRET_ID")
     SKEY = os.environ.get("TENCENTCLOUD_SECRET_KEY")
@@ -417,6 +439,7 @@ def main() -> int:
         logger.error(
             "请通过环境变量设置 TENCENTCLOUD_SECRET_ID / TENCENTCLOUD_SECRET_KEY"
         )
+        set_result("error")
         return 2
 
     cli = ssl_client_new(SID, SKEY)
@@ -433,6 +456,7 @@ def main() -> int:
         local_end = read_local_notafter(fullchain_path)
     except Exception as e:
         logger.exception("[%s] 读取本地证书失败：%s", domain, e)
+        set_result("error")
         return 1
 
     # 查询远端证书
@@ -445,6 +469,7 @@ def main() -> int:
 
     if not remote:
         logger.warning("[%s] 未找到可覆盖该域名的已签发证书，退出", domain)
+        set_result("noop")
         return 0
 
     logger.info(
@@ -456,6 +481,7 @@ def main() -> int:
     )
     if remote["end"] <= local_end:
         logger.info("[%s] 已是最新或更新无必要，退出", domain)
+        set_result("noop")
         return 0
 
     fullchain, key_bytes = remote["fullchain"], remote["key_bytes"]
@@ -465,6 +491,7 @@ def main() -> int:
     # 终极保险：再校验一次（理论上已通过）
     if not cert_covers_domain(fullchain, domain):
         logger.error("[%s] 警告：下载的证书不覆盖该域名（中止）", domain)
+        set_result("error")
         return 1
 
     # 私钥替换逻辑
@@ -491,6 +518,7 @@ def main() -> int:
         )
     except Exception as e:
         logger.exception("[%s] 部署证书失败：%s", domain, e)
+        set_result("error")
         return 1
 
     # 重载 Nginx
@@ -502,12 +530,15 @@ def main() -> int:
         )
     except Exception as e:
         logger.exception("[%s] 证书已部署，但 Nginx 重载失败：%s", domain, e)
+        set_result("error")
         return 1
 
     if args.dry_run:
         logger.info("[%s] dry-run：模拟更新成功", domain)
+        set_result("would_update")
     else:
         logger.info("[%s] 证书更新并重载 Nginx 成功", domain)
+        set_result("updated")
     return 0
 
 

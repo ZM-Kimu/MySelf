@@ -33,8 +33,9 @@ python main.py --domain example.com \
 - `--search-key`：证书池查询关键字（默认等于 `--domain`）
 - `--no-prefer-nginx-bundle`：不优先使用 ZIP 中的 Nginx bundle/fullchain
 - `--keep-local-key`：即使 ZIP 提供私钥，也保留本地私钥
-- `--nginx-test-cmd`：自定义 Nginx 配置测试命令
-- `--nginx-reload-cmd`：自定义 Nginx 重载命令
+- `--nginx-test-cmd`：配置测试命令
+- `--nginx-reload-cmd`：配置重载命令
+- `--result-file`：将执行结果写入文件（`updated`/`noop`/`would_update`/`error`）
 
 ## 使用 manager.sh（推荐）
 `manager.sh` 提供配置管理与定时更新能力，会自动创建 venv 并安装依赖。
@@ -45,6 +46,24 @@ python main.py --domain example.com \
 ./manager.sh add example.com \
   /etc/nginx/ssl/example.com/fullchain.crt \
   /etc/nginx/ssl/example.com/example.com.key
+```
+
+- 添加/更新一个证书配置，并在证书“实际更新成功”后执行命令：
+
+```
+./manager.sh add xxx.aa.com \
+  /etc/nginx/ssl/xxx.aa.com/fullchain.crt \
+  /etc/nginx/ssl/xxx.aa.com/xxx.aa.com.key \
+  --post-cmd "docker restart xxx_nginx"
+```
+
+- 添加/更新一个证书配置，并在证书“实际更新成功”后执行命令：
+
+```
+./manager.sh add xxx.aa.com \
+  /etc/nginx/ssl/xxx.aa.com/fullchain.crt \
+  /etc/nginx/ssl/xxx.aa.com/xxx.aa.com.key \
+  --post-cmd "docker restart xxx_nginx"
 ```
 
 - 列出已配置证书：
@@ -69,10 +88,16 @@ sudo ./manager.sh install-cron
 配置文件默认在 `/etc/tencent-ssl-sync.conf`，格式为：
 
 ```
-<domain>|<fullchain>|<key>
+<domain>|<fullchain>|<key>|<post_cmd(可选)>
+<domain>|<fullchain>|<key>|<post_cmd(可选)>
 ```
+
+`post_cmd` 仅在该域名证书“实际更新成功”后执行；`renew --dry-run` 只会提示将执行的命令，不会真正执行。
+
+`post_cmd` 仅在该域名证书“实际更新成功”后执行；`renew --dry-run` 只会提示将执行的命令，不会真正执行。
 
 ## 行为说明
 - 仅在云端证书到期时间晚于本地证书时才会更新。
+- 云端 `CertEndTime` 按 GMT+8 解析后换算为 UTC 进行比较。
 - 证书部署为原子写入，旧文件会备份到 `fullchain` 所在目录的 `backup/` 下。
 - 需要具备写证书目录与重载 Nginx 的权限（通常需要 root）。
